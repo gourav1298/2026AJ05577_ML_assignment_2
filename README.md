@@ -1,4 +1,3 @@
-# 2026AJ05577_ML_assignment_2
 # Breast Cancer Diagnosis – ML Classification Models Comparison
 
 ## a. Problem Statement
@@ -18,6 +17,7 @@ All five models are trained on the same dataset and evaluated on the same held-o
 | **Features** | 30 (all real-valued, continuous) |
 | **Target** | `target`: **0 = malignant** (212 samples, 37.3%), **1 = benign** (357 samples, 62.7%) |
 | **Missing values** | None |
+| **Loaded via** | `sklearn.datasets.load_breast_cancer` – scikit-learn's bundled copy of the same UCI dataset (identical 569 × 30 data; labels encoded as 0 = malignant, 1 = benign) |
 
 **Features:** Ten real-valued characteristics are computed for each cell nucleus in the image:
 
@@ -43,8 +43,7 @@ For each characteristic the **mean**, **standard error** and **worst** (mean of 
 
 **Repository:** <https://github.com/gourav1298/2026AJ05577_ML_assignment_2>
 
-**Streamlit Application Link**: <https://2026aj05577mlassignment2-oeox4zt3c8ys3f49lggvsm.streamlit.app/>
-
+**Streamlit Application Link:** <https://2026aj05577mlassignment2-oeox4zt3c8ys3f49lggvsm.streamlit.app/>
 
 Repository structure:
 
@@ -52,9 +51,10 @@ Repository structure:
 ├── app.py                              # Streamlit web application
 ├── requirements.txt                    # Python dependencies (pinned versions)
 ├── README.md                           # Project documentation (this file)
-├── ML_Classification_Assignment.ipynb  # Notebook: data exploration, training, evaluation, export
+├── ML_Classification_Assignment.ipynb  # Notebook: data exploration, training, evaluation, cross-validation, export
 ├── test_data.csv                       # Held-out test data (30 features + target) for the app
 └── models/                             # Saved trained models (joblib)
+    ├── Readme.md
     ├── logistic_regression.pkl
     ├── decision_tree.pkl
     ├── knn.pkl
@@ -74,7 +74,9 @@ Repository structure:
 
 ### Comparison Table
 
-Evaluation metrics on the held-out test set (114 samples). Precision, Recall and F1 are reported for the positive class (1 = benign).
+Evaluation metrics on the held-out test set (114 samples).
+
+> **Note on the positive class:** Precision, Recall and F1 are reported for the positive class **1 = benign** (scikit-learn's default `pos_label=1`, as the dataset encodes the labels). In a diagnostic setting the costly error is a *missed malignant* case, so the malignant-class results are listed separately in the [Malignant-class view](#malignant-class-view) below. Accuracy, AUC and MCC do not depend on which class is called positive, and MCC is used to rank the models.
 
 | ML Model Name | Accuracy | AUC | Precision | Recall | F1 | MCC |
 |---|---|---|---|---|---|---|
@@ -84,16 +86,42 @@ Evaluation metrics on the held-out test set (114 samples). Precision, Recall and
 | Naive Bayes | 0.9386 | 0.9878 | 0.9452 | 0.9583 | 0.9517 | 0.8676 |
 | Support Vector Machine | **0.9825** | 0.9950 | **0.9861** | **0.9861** | **0.9861** | **0.9623** |
 
+### Malignant-class view
+
+The same test-set predictions, scored with **malignant (0)** as the class of interest. There are 42 malignant cases in the test set.
+
+| ML Model Name | Malignant missed | Recall (malignant) | Precision (malignant) | F1 (malignant) |
+|---|---|---|---|---|
+| Logistic Regression | **1** | **0.9762** | **0.9762** | **0.9762** |
+| Decision Tree | 3 | 0.9286 | 0.8667 | 0.8966 |
+| KNN | 3 | 0.9286 | 0.9512 | 0.9398 |
+| Naive Bayes | 4 | 0.9048 | 0.9268 | 0.9157 |
+| Support Vector Machine | **1** | **0.9762** | **0.9762** | **0.9762** |
+
+### Cross-validation check
+
+With only 114 test samples, one misclassification moves accuracy by 0.0088, so several gaps in the comparison table come down to one or two predictions. To check that the ranking is stable, each model was also scored with **stratified 5-fold cross-validation on the 455 training rows** (the test set is not used). Mean ± standard deviation over the 5 folds:
+
+| ML Model Name | CV Accuracy | CV AUC | CV MCC |
+|---|---|---|---|
+| Logistic Regression | **0.9780 ± 0.0098** | **0.9959 ± 0.0050** | **0.9535 ± 0.0207** |
+| Decision Tree | 0.9231 ± 0.0120 | 0.9344 ± 0.0157 | 0.8409 ± 0.0235 |
+| KNN | 0.9626 ± 0.0112 | 0.9882 ± 0.0081 | 0.9208 ± 0.0238 |
+| Naive Bayes | 0.9407 ± 0.0247 | 0.9877 ± 0.0061 | 0.8730 ± 0.0537 |
+| Support Vector Machine | 0.9692 ± 0.0146 | 0.9956 ± 0.0048 | 0.9347 ± 0.0313 |
+
+The CV ranking by MCC (LR > SVM > KNN > Naive Bayes > Decision Tree) matches the test-set ranking, and it separates Logistic Regression from SVM, which were tied on the test set.
+
 ### Observations
 
 | ML Model Name | Observation about model performance |
 |---|---|
-| **Logistic Regression** | Best (tied) performer: Accuracy 0.9825, MCC 0.9623 and the highest AUC (0.9954). Only 2 of 114 test samples are misclassified (1 malignant as benign, 1 benign as malignant). After standardization the two classes are almost linearly separable, so a simple linear boundary generalizes very well. |
-| **Decision Tree** | Weakest model on every metric (Accuracy 0.9211, AUC 0.9163, MCC 0.8341) with 9 errors, including 3 malignant cases missed. Its axis-parallel splits approximate the smooth, correlated decision boundary poorly, and a single tree has high variance even with `max_depth=5`. Its low AUC comes from coarse, leaf-based probability estimates. |
+| **Logistic Regression** | Best performer. On the test set it ties SVM on Accuracy (0.9825), Precision, Recall, F1 and MCC (0.9623), and has the highest AUC (0.9954). Only 2 of 114 test samples are misclassified (1 malignant as benign, 1 benign as malignant). It is also clearly best in cross-validation (CV MCC 0.9535 ± 0.0207). After standardization the two classes are almost linearly separable, so a simple linear boundary generalizes very well. |
+| **Decision Tree** | Weakest model overall – lowest Accuracy (0.9211), AUC (0.9163), Recall, F1 and MCC (0.8341), and lowest in cross-validation (CV MCC 0.8409) – with 9 test errors, including 3 malignant cases missed. Its axis-parallel splits approximate the smooth, correlated decision boundary poorly, and a single tree has high variance even with `max_depth=5`. Its low AUC comes from coarse, leaf-based probability estimates. |
 | **KNN** | Strong performance (Accuracy 0.9561, MCC 0.9054, Recall 0.9722) thanks to feature scaling. It makes 5 errors (3 malignant missed), mostly on samples near the class boundary where neighbors of both classes are mixed. It is slightly behind LR/SVM because Euclidean distance over 30 dimensions, many of them redundant, adds noise. |
-| **Naive Bayes** | High AUC (0.9878), so it ranks samples well, but its hard predictions are weaker (Accuracy 0.9386, MCC 0.8676, 4 malignant missed). Many features are strongly correlated (e.g. radius, perimeter, area), which violates the conditional-independence assumption and leads to over-confident probabilities. It is still a fast, reasonable baseline. |
-| **Support Vector Machine** | Tied best with Logistic Regression on Accuracy, Precision, Recall, F1 and MCC (0.9623), with AUC 0.9950 and the same 2 misclassifications. The RBF kernel with scaled features finds a maximum-margin boundary that generalizes very well. On this dataset the extra flexibility of the kernel brings no gain over a linear model. |
-| **Overall winner for this dataset** | **Logistic Regression.** It ties SVM for the best Accuracy, Precision, Recall, F1 and MCC, and has the highest AUC. Like SVM, it misses only 1 of 42 malignant cases (malignant-class recall 0.976), the most costly error in a medical setting. Being simpler, faster and more interpretable (its coefficients show feature influence), it is the preferred model. Ranking by MCC: LR = SVM > KNN > Naive Bayes > Decision Tree. |
+| **Naive Bayes** | High AUC (0.9878), so it ranks samples well, but its hard predictions are weaker (Accuracy 0.9386, MCC 0.8676, 4 malignant missed) and it is the least stable model in cross-validation (CV MCC 0.8730 ± 0.0537). Many features are strongly correlated – 21 of the 435 feature pairs have \|r\| > 0.9 (e.g. mean radius vs mean perimeter, r = 0.998) – which violates the conditional-independence assumption and leads to over-confident probabilities. It is still a fast, reasonable baseline. |
+| **Support Vector Machine** | Tied best with Logistic Regression on the test set for Accuracy, Precision, Recall, F1 and MCC (0.9623), with AUC 0.9950 and the same 2 misclassifications. In cross-validation it is slightly behind LR (CV MCC 0.9347 vs 0.9535). The RBF kernel with scaled features finds a good maximum-margin boundary, but on this dataset its extra flexibility brings no gain over a linear model. |
+| **Overall winner for this dataset** | **Logistic Regression.** It ties SVM for the best test Accuracy, Precision, Recall, F1 and MCC, has the highest test AUC, and is ahead of SVM in cross-validation. Like SVM, it misses only 1 of 42 malignant cases (malignant-class recall 0.9762), the most costly error in a medical setting. Being simpler, faster and more interpretable (its coefficients show feature influence), it is the preferred model. Ranking by test MCC: LR = SVM > KNN > Naive Bayes > Decision Tree; CV MCC gives the same order with LR ahead of SVM. |
 
 ## Streamlit App
 
@@ -105,7 +133,9 @@ The app (`app.py`) provides:
 - **Confusion matrix and classification report** for the selected model.
 - **Compare All Models tab:** results of all 5 models on the uploaded test data, side by side.
 
-Models are loaded from the saved `.pkl` files. The uploaded data is used only for prediction and evaluation, never for retraining.
+- **Input validation:** a clear error is shown if the CSV is unreadable, is missing any feature or the `target` column, has non-numeric or missing feature values, or has labels other than 0/1.
+
+Models are loaded from the saved `.pkl` files in `models/`. The uploaded data is used only for prediction and evaluation, never for retraining. The server log (terminal, or "Manage app → Logs" on Streamlit Cloud) records each model file being loaded and each prediction run on uploaded data.
 
 ### Run locally
 
@@ -113,4 +143,3 @@ Models are loaded from the saved `.pkl` files. The uploaded data is used only fo
 pip install -r requirements.txt
 streamlit run app.py
 ```
-
