@@ -9,6 +9,7 @@ Models are loaded from the saved .pkl files in models/ - nothing is
 retrained on the uploaded data; it is only used for prediction/evaluation.
 """
 
+import logging
 from pathlib import Path
 
 import joblib
@@ -40,12 +41,30 @@ MODEL_FILES = {
 TARGET_COL = "target"
 CLASS_NAMES = ["malignant", "benign"]  # 0 = malignant, 1 = benign
 
-st.set_page_config(page_title="Breast Cancer Classification", page_icon="🩺", layout="wide")
+st.set_page_config(page_title="Breast Cancer Classification", layout="wide")
+
+# Log to the Streamlit server console. The script re-runs on every interaction,
+# so only attach the handler once.
+logger = logging.getLogger("ml_app")
+if not logger.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [ml_app] %(message)s"))
+    logger.addHandler(_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 
 @st.cache_resource
 def load_models() -> dict:
-    return {name: joblib.load(MODEL_DIR / f) for name, f in MODEL_FILES.items()}
+    # Runs once per server process; later reruns and uploads reuse the cached models.
+    models = {}
+    for name, f in MODEL_FILES.items():
+        path = MODEL_DIR / f
+        logger.info("Loading saved model %r from %s", name, path)
+        models[name] = joblib.load(path)
+        logger.info("Loaded %r -> %s", name, type(models[name]).__name__)
+    logger.info("All %d models loaded from %s (no training performed)", len(models), MODEL_DIR)
+    return models
 
 
 @st.cache_data
@@ -53,8 +72,10 @@ def load_csv(path_or_buffer) -> pd.DataFrame:
     return pd.read_csv(path_or_buffer)
 
 
-def evaluate(model, X: pd.DataFrame, y_true: pd.Series):
+def evaluate(name: str, model, X: pd.DataFrame, y_true: pd.Series):
     """Predict with an already-trained model and compute the 6 metrics (no fitting)."""
+    logger.info("Predicting with saved model %r (%s) on %d rows",
+                name, MODEL_DIR.name + "/" + MODEL_FILES[name], len(X))
     y_pred = model.predict(X)
     # AUC needs a continuous score: class-1 probability, or the SVM's decision function.
     if hasattr(model, "predict_proba"):
@@ -117,7 +138,7 @@ st.sidebar.caption(
 # ---------------------------------------------------------------------------
 # Load and validate test data
 # ---------------------------------------------------------------------------
-st.title("🩺 Breast Cancer Diagnosis - Model Evaluation Dashboard")
+st.title("Breast Cancer Diagnosis - Model Evaluation Dashboard")
 st.caption(
     "Breast Cancer Wisconsin (Diagnostic) dataset, UCI ML Repository - classifying breast "
     "masses as **malignant (0)** or **benign (1)** from 30 cell-nucleus features."
@@ -155,6 +176,8 @@ if df[feature_cols].isna().any().any():
     st.stop()
 
 if uploaded is not None:
+    logger.info("Received uploaded test file %r: %d rows, %d columns",
+                uploaded.name, len(df), df.shape[1])
     st.success(f"Evaluating on uploaded file **{uploaded.name}** ({len(df)} rows)")
 else:
     st.info(
@@ -173,7 +196,7 @@ tab_eval, tab_compare, tab_data = st.tabs(
 # (c) metrics and (d) confusion matrix + classification report for one model
 # ---------------------------------------------------------------------------
 with tab_eval:
-    metrics, y_pred = evaluate(models[model_name], X_test, y_test)
+    metrics, y_pred = evaluate(model_name, models[model_name], X_test, y_test)
 
     st.subheader(model_name)
     st.markdown("##### Evaluation metrics")
@@ -211,7 +234,7 @@ with tab_eval:
 with tab_compare:
     st.subheader("All 5 models on the current test data")
     comparison = pd.DataFrame(
-        {name: evaluate(m, X_test, y_test)[0] for name, m in models.items()}
+        {name: evaluate(name, m, X_test, y_test)[0] for name, m in models.items()}
     ).T
     comparison.index.name = "Model"
     st.dataframe(
