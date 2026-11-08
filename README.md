@@ -43,6 +43,8 @@ For each characteristic the **mean**, **standard error** and **worst** (mean of 
 
 **Repository:** <https://github.com/gourav1298/2026AJ05577_ML_assignment_2>
 
+**Streamlit Application Link**: <https://2026aj05577mlassignment2-oeox4zt3c8ys3f49lggvsm.streamlit.app/>
+
 
 Repository structure:
 
